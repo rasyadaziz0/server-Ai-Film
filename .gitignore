@@ -1,0 +1,23 @@
+# dependencies
+/node_modules
+
+# build output
+/dist
+
+# environment files
+.env
+.env*
+!.env.example
+
+# archives & logs
+*.zip
+*.log
+.DS_Store
+
+# documentation and sql scripts (not for github)
+AGENTS.md
+CLAUDE.md
+claude.md
+/sql
+sql
+

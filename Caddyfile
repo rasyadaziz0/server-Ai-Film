@@ -1,0 +1,12 @@
+# Replace api.yourdomain.com with your actual domain
+api.yourdomain.com {
+  reverse_proxy api:4000
+  encode gzip
+
+  header {
+    Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+}

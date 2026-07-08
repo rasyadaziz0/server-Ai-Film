@@ -1,0 +1,90 @@
+# =========================================================
+# AI Film Studio — Alibaba ECS Docker Compose (Singapore)
+# Containers: caddy (reverse proxy), api, worker, redis
+# =========================================================
+services:
+  # --- Caddy: Automatic HTTPS reverse proxy ---
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    networks:
+      - backend
+
+  # --- API: Express HTTP server ---
+  api:
+    build:
+      context: ..
+      dockerfile: ecs/Dockerfile.api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "4000:4000"
+    expose:
+      - "4000"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
+  # --- Worker: BullMQ pipeline/video workers + outbox dispatcher ---
+  worker:
+    build:
+      context: ..
+      dockerfile: ecs/Dockerfile.worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+
+  # --- Redis: BullMQ queue backend with AOF persistence ---
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - backend
+
+volumes:
+  caddy_data:
+  caddy_config:
+  redis_data:
+
+networks:
+  backend:
+    driver: bridge
