@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { verifyJwt, verifyStudioOwnership, AuthError } from "../../lib/auth";
+import { verifyJwt, verifyStudioOwnership, verifyStudioAccess, AuthError } from "../../lib/auth";
 import { generatePresignedUpload } from "../../lib/oss";
 
 export const aiRouter = Router();
@@ -25,7 +25,7 @@ aiRouter.post(
         return res.status(400).json({ error: "Only image uploads are allowed" });
       }
 
-      await verifyStudioOwnership(studioId, user.sub);
+      await verifyStudioAccess(studioId, user.sub, 'editor', user.email);
 
       const result = await generatePresignedUpload(
         `actor-images/${studioId}`,
@@ -65,7 +65,7 @@ aiRouter.post(
       }
 
       if (studioId) {
-        await verifyStudioOwnership(studioId, user.sub);
+        await verifyStudioAccess(studioId, user.sub, 'editor', user.email);
       }
 
       const apiKey = process.env.DASHSCOPE_API_KEY;

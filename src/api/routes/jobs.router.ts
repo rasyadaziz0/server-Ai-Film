@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { verifyJwt, verifyStudioOwnership, verifyNodeOwnership, AuthError } from "../../lib/auth";
+import { verifyJwt, verifyStudioOwnership, verifyStudioAccess, verifyNodeOwnership, AuthError } from "../../lib/auth";
 import { checkKillSwitch, KillSwitchError } from "../../lib/killSwitch";
 import { getServiceSupabase } from "../../lib/supabase";
 import { estimatePipelineCost, getDailyLimitMicroUsd } from "../../lib/budget";
@@ -28,8 +28,8 @@ jobsRouter.post("/", async (req: Request, res: Response, next: NextFunction) => 
       return res.status(400).json({ error: "idempotencyKey is required" });
     }
 
-    // 3. Explicit ownership check (service-role bypasses RLS!)
-    await verifyStudioOwnership(studioId, user.sub);
+    // 3. Explicit access check (service-role bypasses RLS! Requires at least editor or owner role)
+    await verifyStudioAccess(studioId, user.sub, 'editor', user.email);
 
     // 4. Validate targetNodeId if provided (untrusted browser input)
     if (targetNodeId) {

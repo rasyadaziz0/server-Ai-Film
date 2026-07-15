@@ -56,6 +56,89 @@ export async function verifyStudioOwnership(studioId: string, userId: string): P
 }
 
 /**
+ * Role hierarchy and access check for ECS endpoints.
+ * Precedence: owner > editor collaborator > viewer collaborator > shared_link viewer
+ */
+export async function verifyStudioAccess(
+  studioId: string,
+  userId: string,
+  requiredRole: 'owner' | 'editor' | 'viewer',
+  userEmail?: string
+): Promise<{ role: 'owner' | 'editor' | 'viewer'; accessSource: string }> {
+  const supabase = getServiceSupabase();
+
+  // 1. Check basic studio metadata
+  const { data: studio, error: studioErr } = await supabase
+    .from("studios")
+    .select("id, user_id, sharing_visibility, share_token")
+    .eq("id", studioId)
+    .single();
+
+  if (studioErr || !studio) {
+    throw new AuthError("Studio not found or access denied", 403);
+  }
+
+  let resolvedRole: 'owner' | 'editor' | 'viewer' | null = null;
+  let accessSource: string = '';
+
+  // Level 1: Owner
+  if (studio.user_id === userId) {
+    resolvedRole = 'owner';
+    accessSource = 'owner';
+  } else {
+    // Level 2 & 3: Permanent Collaborator
+    const collabQuery = supabase
+      .from("studio_collaborators")
+      .select("role")
+      .eq("studio_id", studioId);
+
+    if (userEmail) {
+      collabQuery.or(`user_id.eq.${userId},user_email.eq.${userEmail}`);
+    } else {
+      collabQuery.eq("user_id", userId);
+    }
+
+    const { data: collabs } = await collabQuery;
+    if (collabs && collabs.length > 0) {
+      const isEditor = collabs.some((c) => c.role === 'editor');
+      resolvedRole = isEditor ? 'editor' : 'viewer';
+      accessSource = 'collaborator';
+    } else if (studio.sharing_visibility === 'link_view' && studio.share_token) {
+      // Level 4: Ephemeral Shared Link Grant
+      const { data: grant } = await supabase
+        .from("studio_shared_access_grants")
+        .select("granted_token_snapshot")
+        .eq("studio_id", studioId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (grant && grant.granted_token_snapshot === studio.share_token) {
+        resolvedRole = 'viewer';
+        accessSource = 'shared_link';
+      }
+    }
+  }
+
+  if (!resolvedRole) {
+    throw new AuthError("403 Forbidden Access Denied: No access to this studio", 403);
+  }
+
+  // Check role hierarchy against requiredRole
+  const roleWeights: Record<'owner' | 'editor' | 'viewer', number> = {
+    owner: 3,
+    editor: 2,
+    viewer: 1,
+  };
+
+  if (roleWeights[resolvedRole] < roleWeights[requiredRole]) {
+    throw new AuthError(`403 Forbidden Access Denied: Requires ${requiredRole} or higher role (your role is ${resolvedRole})`, 403);
+  }
+
+  return { role: resolvedRole, accessSource };
+}
+
+
+/**
  * Validates that a node belongs to a specific studio.
  * Prevents IDOR when targetNodeId comes from browser.
  */
