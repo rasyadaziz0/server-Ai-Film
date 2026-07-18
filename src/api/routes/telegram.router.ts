@@ -223,10 +223,15 @@ async function sendTelegramMessage(
       secrets.key_version
     );
 
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
+    await fetch(`${telegramApi}/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+        parse_mode: 'Markdown'
+      })
     });
   } catch (e: any) {
     console.error("[Telegram] Failed to send message:", e.message);

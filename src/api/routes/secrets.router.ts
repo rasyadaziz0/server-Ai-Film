@@ -80,11 +80,12 @@ secretsRouter.post(
       }
       
       const webhookUrl = `https://${apiDomain}/v1/telegram/webhook/${publicWebhookId}`;
+      const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
 
       // Auto-register webhook with Telegram
       if (botToken && telegramMode !== "none") {
         try {
-          const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+          const tgRes = await fetch(`${telegramApi}/bot${botToken}/setWebhook`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -95,7 +96,7 @@ secretsRouter.post(
           });
           
           // Setup custom Telegram Menu commands
-          await fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+          await fetch(`${telegramApi}/bot${botToken}/setMyCommands`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -109,7 +110,7 @@ secretsRouter.post(
           
           // Send a welcome connection message to the user!
           if (chatId) {
-             await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+             await fetch(`${telegramApi}/bot${botToken}/sendMessage`, {
                method: "POST",
                headers: { "Content-Type": "application/json" },
                body: JSON.stringify({
