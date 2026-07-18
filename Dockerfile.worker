@@ -6,8 +6,10 @@ RUN npm install --no-audit --no-fund --ignore-scripts && ln -s /app/ecs/node_mod
 COPY ecs/tsconfig.json ./
 COPY ecs/src/ ./src/
 
-# Copy the frontend src folder directly from the build context (much faster than git clone!)
-COPY src/ ../src/
+RUN apk add --no-cache git && \
+    git clone https://ghfast.top/https://github.com/rasyadaziz0/AI-film-studio.git /tmp/frontend && \
+    cp -r /tmp/frontend/src ../src && \
+    rm -rf /tmp/frontend
 
 RUN npx tsc
 
