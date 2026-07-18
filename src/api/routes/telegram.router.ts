@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { getServiceSupabase } from "../../lib/supabase";
-import { constantTimeEqual, decrypt } from "../../lib/crypto";
+import { constantTimeEqual, decrypt, hmacSha256 } from "../../lib/crypto";
 import { checkKillSwitch, KillSwitchError } from "../../lib/killSwitch";
 import { estimatePipelineCost, getDailyLimitMicroUsd } from "../../lib/budget";
 
@@ -36,14 +36,15 @@ telegramRouter.post(
       }
 
       // 2. Constant-time verify webhook secret
-      if (!secrets.webhook_secret_hash || !constantTimeEqual(secretToken, secrets.webhook_secret_hash)) {
+      const incomingHash = hmacSha256(secretToken);
+      if (!secrets.webhook_secret_hash || !constantTimeEqual(incomingHash, secrets.webhook_secret_hash)) {
         return res.status(403).send("Invalid secret");
       }
 
       // 3. Get studio info
       const { data: studio, error: studioErr } = await supabase
         .from("studios")
-        .select("id, telegram_chat_id, telegram_mode, video_duration")
+        .select("id, user_id, telegram_chat_id, telegram_mode, video_duration")
         .eq("id", secrets.studio_id)
         .single();
 
@@ -51,35 +52,63 @@ telegramRouter.post(
         return res.status(403).send("Studio not found");
       }
 
-      const payload = req.body;
-      const message = payload.message || payload.edited_message;
+      const chatId = req.body.message?.chat?.id?.toString() || req.body.edited_message?.chat?.id?.toString();
+      const text = req.body.message?.text || req.body.edited_message?.text;
+      const updateId = req.body.update_id?.toString();
 
-      if (!message || !message.chat) {
-        return res.sendStatus(200); // Acknowledge non-message updates
-      }
-
-      const chatId = message.chat.id.toString();
-      const updateId = payload.update_id?.toString();
-
-      // 4. Chat allowlist
-      if (!studio.telegram_chat_id || studio.telegram_chat_id !== chatId) {
-        console.warn(`[Telegram] Ignored message from unauthorized chat_id: ${chatId}`);
+      if (!chatId) {
         return res.sendStatus(200);
       }
 
-      // 5. Only process in full_telegram mode
-      if (studio.telegram_mode !== "full_telegram") {
+      // 4. Verify allowed Chat ID (Security)
+      if (studio.telegram_chat_id && studio.telegram_chat_id !== chatId) {
+        console.log(`[Telegram] Unauthorized Chat ID: ${chatId}`);
         return res.sendStatus(200);
       }
 
-      const text = message.text;
-      if (!text || text.startsWith("/")) {
-        if (text === "/start") {
+      // 5. Check if it's a command
+      if (text && text.startsWith("/")) {
+        if (text === "/start" || text === "/help") {
           await sendTelegramMessage(
             secrets, supabase,
             chatId,
-            "Welcome to AI Film Studio! Type a prompt to generate a video."
+            "🎬 *Welcome to AI Film Studio!*\n\nKetik ide cerita atau prompt apa saja di sini, dan sistem kami akan otomatis membuatkan naskah dan videonya untuk Anda.\n\nContoh: _Bikin video tentang T-Rex yang main piano di bulan_\n\n*Command lain:*\n/status - Cek status render video terakhir\n/duration <detik> - Ubah durasi video (5, 15, 30)\n/lang <bahasa> - Ubah bahasa (id, en, dll)"
           );
+        } else if (text === "/status") {
+          // Check last job status
+          const { data: lastJob } = await supabase
+            .from("jobs")
+            .select("status, result_url, error")
+            .eq("studio_id", studio.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+            
+          let statusMsg = "Belum ada job video yang berjalan di studio ini.";
+          if (lastJob) {
+             if (lastJob.status === "done") statusMsg = `✅ *Selesai!* Video terakhir Anda sudah jadi: ${lastJob.result_url}`;
+             else if (lastJob.status === "error") statusMsg = `❌ *Gagal:* ${lastJob.error}`;
+             else statusMsg = `⏳ *Status:* Sedang diproses (${lastJob.status})... Mohon tunggu.`;
+          }
+          await sendTelegramMessage(secrets, supabase, chatId, statusMsg);
+        } else if (text.startsWith("/duration")) {
+          const secs = parseInt(text.split(" ")[1]);
+          if ([5, 15, 30].includes(secs)) {
+            await supabase.from("studios").update({ video_duration: secs }).eq("id", studio.id);
+            await sendTelegramMessage(secrets, supabase, chatId, `✅ Durasi video berhasil diubah menjadi *${secs} detik*.`);
+          } else {
+            await sendTelegramMessage(secrets, supabase, chatId, `⚠️ Format salah. Contoh: /duration 15\n(Pilihan: 5, 15, 30)`);
+          }
+        } else if (text.startsWith("/lang") || text.startsWith("/bahasa")) {
+          const lang = text.split(" ")[1];
+          if (lang) {
+            await supabase.from("studios").update({ language: lang }).eq("id", studio.id);
+            await sendTelegramMessage(secrets, supabase, chatId, `✅ Bahasa berhasil diubah menjadi: *${lang}*`);
+          } else {
+            await sendTelegramMessage(secrets, supabase, chatId, `⚠️ Format salah. Contoh: /lang id\nAtau /lang en`);
+          }
+        } else {
+           await sendTelegramMessage(secrets, supabase, chatId, `⚠️ Command tidak dikenali. Ketik /help untuk daftar command.`);
         }
         return res.sendStatus(200);
       }
@@ -122,7 +151,7 @@ telegramRouter.post(
         "create_job_and_reserve",
         {
           p_studio_id: studio.id,
-          p_user_id: null, // Telegram doesn't have user context from JWT
+          p_user_id: studio.user_id, // Pass user_id for budget checking
           p_source: "telegram",
           p_input: text,
           p_external_event_id: updateId,
@@ -197,7 +226,7 @@ async function sendTelegramMessage(
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" }),
     });
   } catch (e: any) {
     console.error("[Telegram] Failed to send message:", e.message);
