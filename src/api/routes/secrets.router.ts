@@ -74,13 +74,66 @@ secretsRouter.post(
         })
         .eq("id", studioId);
 
-      // Return webhook URL and secret for user to configure in BotFather
-      const apiDomain = process.env.API_DOMAIN || "api.yourdomain.com";
+      const apiDomain = process.env.API_DOMAIN;
+      if (!apiDomain || apiDomain.includes("yourdomain.com")) {
+        return res.status(400).json({ error: "API_DOMAIN belum disetel di .env backend. Telegram membutuhkan domain HTTPS." });
+      }
+      
+      const webhookUrl = `https://${apiDomain}/v1/telegram/webhook/${publicWebhookId}`;
+
+      // Auto-register webhook with Telegram
+      if (botToken && telegramMode !== "none") {
+        try {
+          const tgRes = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: webhookUrl,
+              secret_token: webhookSecret,
+              allowed_updates: ["message", "edited_message"]
+            })
+          });
+          
+          // Setup custom Telegram Menu commands
+          await fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              commands: [
+                { command: "start", description: "Mulai menggunakan bot" },
+                { command: "help", description: "Tampilkan bantuan & cara pakai" },
+                { command: "status", description: "Cek status render video saat ini" },
+              ]
+            })
+          });
+          
+          // Send a welcome connection message to the user!
+          if (chatId) {
+             await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({
+                 chat_id: chatId,
+                 text: "🎉 *Koneksi Berhasil!*\n\nStudio AI Anda sekarang telah terhubung dengan Telegram bot ini. Ketik /help untuk melihat menu.",
+                 parse_mode: "Markdown"
+               })
+             });
+          }
+          
+          const tgData = await tgRes.json();
+          if (!tgData.ok) {
+             console.error("[Secrets] Telegram setWebhook failed:", tgData);
+             return res.status(400).json({ error: `Telegram Error: ${tgData.description}` });
+          }
+        } catch (tgErr: any) {
+          console.error("[Secrets] Failed to contact Telegram API:", tgErr);
+          return res.status(500).json({ error: "Gagal menghubungi Telegram API untuk setWebhook" });
+        }
+      }
+
       return res.json({
         success: true,
-        webhookUrl: `https://${apiDomain}/v1/telegram/webhook/${publicWebhookId}`,
-        webhookSecret, // Plain secret — user needs this to call setWebhook
-        message: "Use the webhookUrl and webhookSecret to configure your Telegram bot via setWebhook.",
+        message: "Webhook berhasil didaftarkan ke Telegram secara otomatis!",
       });
     } catch (err: any) {
       if (err instanceof AuthError) {
