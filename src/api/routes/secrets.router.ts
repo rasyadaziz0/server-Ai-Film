@@ -81,13 +81,17 @@ secretsRouter.post(
       
       const webhookUrl = `https://${apiDomain}/v1/telegram/webhook/${publicWebhookId}`;
       const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
+      const relaySecret = process.env.TELEGRAM_RELAY_SECRET;
 
       // Auto-register webhook with Telegram
       if (botToken && telegramMode !== "none") {
         try {
           const tgRes = await fetch(`${telegramApi}/bot${botToken}/setWebhook`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
+            },
             body: JSON.stringify({
               url: webhookUrl,
               secret_token: webhookSecret,
@@ -98,7 +102,10 @@ secretsRouter.post(
           // Setup custom Telegram Menu commands
           await fetch(`${telegramApi}/bot${botToken}/setMyCommands`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
+            },
             body: JSON.stringify({
               commands: [
                 { command: "start", description: "Mulai menggunakan bot" },
@@ -112,7 +119,10 @@ secretsRouter.post(
           if (chatId) {
              await fetch(`${telegramApi}/bot${botToken}/sendMessage`, {
                method: "POST",
-               headers: { "Content-Type": "application/json" },
+               headers: { 
+                 "Content-Type": "application/json",
+                 ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
+               },
                body: JSON.stringify({
                  chat_id: chatId,
                  text: "🎉 *Koneksi Berhasil!*\n\nStudio AI Anda sekarang telah terhubung dengan Telegram bot ini. Ketik /help untuk melihat menu.",
