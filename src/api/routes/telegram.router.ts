@@ -224,9 +224,13 @@ async function sendTelegramMessage(
     );
 
     const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
+    const relaySecret = process.env.TELEGRAM_RELAY_SECRET;
     await fetch(`${telegramApi}/bot${botToken}/sendMessage`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(relaySecret ? { "x-relay-secret": relaySecret } : {}),
+      },
       body: JSON.stringify({
         chat_id: chatId,
         text: text,

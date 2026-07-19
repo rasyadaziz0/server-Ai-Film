@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev:all": "npx concurrently \"npm run dev\" \"npm run dev:worker\"",
     "dev": "tsx watch src/api/server.ts",
     "dev:worker": "tsx watch src/worker/index.ts",
     "build": "tsc",
@@ -26,6 +27,7 @@
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.2",
     "@types/node": "^22.0.0",
+    "concurrently": "^10.0.3",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }
