@@ -1,5 +1,5 @@
 # Replace api.yourdomain.com with your actual domain
-api.yourdomain.com {
+api.acadlabs.fun {
   reverse_proxy api:4000
   encode gzip
 
