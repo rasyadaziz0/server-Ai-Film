@@ -14,6 +14,7 @@
   "dependencies": {
     "@alicloud/credentials": "^2.3.1",
     "@aws-sdk/client-s3": "^3.1078.0",
+    "@aws-sdk/s3-request-presigner": "^3.1091.0",
     "@supabase/supabase-js": "^2.108.1",
     "ali-oss": "^6.21.0",
     "bullmq": "^5.30.1",

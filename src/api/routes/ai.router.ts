@@ -1,6 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { verifyJwt, verifyStudioOwnership, verifyStudioAccess, AuthError } from "../../lib/auth";
-import { generatePresignedUpload } from "../../lib/oss";
 
 export const aiRouter = Router();
 
@@ -27,11 +26,12 @@ aiRouter.post(
 
       await verifyStudioAccess(studioId, user.sub, 'editor', user.email);
 
-      const result = await generatePresignedUpload(
+      // Use Cloudflare R2 instead of Alibaba OSS
+      const { CloudflareR2 } = await import("../../../../src/lib/cloud/CloudflareR2");
+      const result = await CloudflareR2.generatePresignedUpload(
         `actor-images/${studioId}`,
         filename,
-        contentType,
-        10 * 1024 * 1024 // 10MB max
+        contentType
       );
 
       return res.json({
