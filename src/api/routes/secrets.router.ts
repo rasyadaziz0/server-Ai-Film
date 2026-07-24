@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { verifyJwt, verifyStudioOwnership, AuthError } from "../../lib/auth";
 import { getServiceSupabase } from "../../lib/supabase";
-import { encrypt, hmacSha256, generateSecureToken } from "../../lib/crypto";
+import { encrypt, decrypt, hmacSha256, generateSecureToken } from "../../lib/crypto";
 
 export const secretsRouter = Router();
 
@@ -15,7 +15,7 @@ secretsRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = await verifyJwt(req.headers.authorization);
-      const { studioId, botToken, chatId, telegramMode } = req.body;
+      let { studioId, botToken, chatId, telegramMode } = req.body;
 
       if (!studioId) {
         return res.status(400).json({ error: "studioId is required" });
@@ -25,13 +25,32 @@ secretsRouter.post(
 
       const supabase = getServiceSupabase();
 
+      // If botToken is not provided, fetch existing to keep webhook functional
+      if (!botToken && telegramMode !== "none") {
+        const { data: existingSec } = await supabase
+          .from("studio_secrets")
+          .select("encrypted_bot_token, iv, auth_tag, key_version")
+          .eq("studio_id", studioId)
+          .single();
+          
+        if (existingSec?.encrypted_bot_token) {
+          botToken = decrypt(
+            existingSec.encrypted_bot_token,
+            existingSec.iv,
+            existingSec.auth_tag,
+            existingSec.key_version
+          );
+        }
+      }
+
       // Generate a unique public webhook ID for this studio
       const publicWebhookId = generateSecureToken(16); // 32 hex chars
 
       // Generate a webhook secret for Telegram setWebhook
       const webhookSecret = generateSecureToken(32); // 64 hex chars
 
-      // Encrypt bot token with AES-256-GCM
+      // Encrypt bot token with AES-256-GCM (only if newly provided, otherwise we keep old one by not updating those columns)
+      // Wait, if botToken was pulled from DB, encrypting it again is fine and refreshes the IV.
       let encryptedData = null;
       if (botToken) {
         encryptedData = encrypt(botToken);
