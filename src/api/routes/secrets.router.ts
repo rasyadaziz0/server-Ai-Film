@@ -95,7 +95,7 @@ secretsRouter.post(
             body: JSON.stringify({
               url: webhookUrl,
               secret_token: webhookSecret,
-              allowed_updates: ["message", "edited_message"]
+              allowed_updates: ["message", "edited_message", "callback_query"]
             })
           });
           

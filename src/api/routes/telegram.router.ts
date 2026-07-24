@@ -8,14 +8,6 @@ import { TelegramHandler } from "../../lib/telegram/TelegramHandler";
 
 export const telegramRouter = Router();
 
-/**
- * POST /v1/telegram/webhook/:publicWebhookId
- *
- * Thin router — hanya menangani:
- *  1. Security (HMAC verification, chat ID allowlist)
- *  2. Delegasi ke TelegramHandler (command / callback)
- *  3. Job creation (prompt → video pipeline)
- */
 telegramRouter.post(
   "/webhook/:publicWebhookId",
   async (req: Request, res: Response, _next: NextFunction) => {
