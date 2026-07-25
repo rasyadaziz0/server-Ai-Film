@@ -1,6 +1,8 @@
 import { TelegramBot } from "./TelegramBot";
 import { LANGUAGES, DURATIONS, NODE_EMOJI } from "./constants";
 
+const escapeMd = (t: string) => t.replace(/([_*`\[])/g, "\\$1");
+
 /**
  * TelegramHandler — semua logika bisnis untuk menangani
  * command (teks) dan callback query (klik tombol) dari user.
@@ -25,7 +27,8 @@ export class TelegramHandler {
         "*Command:*\n" +
         "/status — Check pipeline & active nodes status\n" +
         "/duration — Change video duration\n" +
-        "/lang — Ubah bahasa output"
+        "/lang — Change output language",
+      { parseMode: "Markdown" }
     );
   }
 
@@ -50,23 +53,23 @@ export class TelegramHandler {
       msg += "No render jobs have been started in this studio yet.\n";
     } else {
       const jobStatusMap: Record<string, string> = {
-        done: "✅ *Selesai (Success)*",
-        error: "❌ *Gagal (Failed)*",
-        running: "⏳ *Sedang Berjalan (Processing)*",
-        pending: "⏱️ *Menunggu (Queued)*",
-        polling: "🔄 *Menerapkan (Polling)*"
+        done: "✅ *Completed (Success)*",
+        error: "❌ *Failed*",
+        running: "⏳ *Running (Processing)*",
+        pending: "⏱️ *Pending (Queued)*",
+        polling: "🔄 *Applying (Polling)*"
       };
       
       msg += `📋 *Status Pipeline:* ${jobStatusMap[lastJob.status] || lastJob.status}\n`;
       if (lastJob.status === "error") {
-        msg += `*Error Detail:* _${lastJob.error || "Unknown error"}_\n`;
+        msg += `*Error Detail:* _${escapeMd(lastJob.error || "Unknown error")}_\n`;
       } else if (lastJob.status === "done" && lastJob.result_url) {
-        msg += `🎬 [Lihat Video Hasil Rendering](${lastJob.result_url})\n`;
+        msg += `🎬 [View Rendered Video](${lastJob.result_url})\n`;
       }
     }
 
     if (allNodes && allNodes.length > 0) {
-      msg += "\n⚙️ *Detail Proses AI (Nodes):*\n";
+      msg += "\n⚙️ *AI Process Details (Nodes):*\n";
       
       const PRETTY_TYPES: Record<string, string> = {
         producer: "Ideation",
@@ -89,7 +92,7 @@ export class TelegramHandler {
         if (name.startsWith("New ")) name = name.replace("New ", "");
         if (name.length > 25) name = name.substring(0, 22) + "...";
         
-        msg += `${icon} *${typeName}:* _${name}_\n`;
+        msg += `${icon} *${typeName}:* _${escapeMd(name)}_\n`;
       }
 
       const doneCount = allNodes.filter((n: any) => n.status === "done").length;
@@ -103,7 +106,7 @@ export class TelegramHandler {
       msg += `\n📈 *Progress:* \`${progressStr}\` (${doneCount}/${totalCount})\n`;
     }
 
-    await this.bot.sendMessage(chatId, msg, { disable_web_page_preview: true });
+    await this.bot.sendMessage(chatId, msg, { parseMode: "Markdown", disablePreview: true });
   }
 
   async handleDuration(chatId: string, arg?: string): Promise<void> {
@@ -112,7 +115,7 @@ export class TelegramHandler {
       const secs = parseInt(arg);
       if ((DURATIONS as readonly number[]).includes(secs)) {
         await this.supabase.from("studios").update({ video_duration: secs }).eq("id", this.studio.id);
-        await this.bot.sendMessage(chatId, `✅ Video duration successfully changed to *${secs} seconds*.`);
+        await this.bot.sendMessage(chatId, `✅ Video duration successfully changed to *${secs} seconds*.`, { parseMode: "Markdown" });
       } else {
         await this.bot.sendMessage(chatId, `⚠️ Available durations: 5, 15, or 30 seconds.`);
       }
@@ -125,12 +128,15 @@ export class TelegramHandler {
       chatId,
       `🎬 *Choose Video Duration:*\n\nCurrent duration: *${currentDuration} seconds*`,
       {
-        inline_keyboard: [
-          DURATIONS.map(d => ({
-            text: `${d === currentDuration ? "✅ " : ""}${d} detik`,
-            callback_data: `duration:${d}`,
-          })),
-        ],
+        parseMode: "Markdown",
+        replyMarkup: {
+          inline_keyboard: [
+            DURATIONS.map(d => ({
+              text: `${d === currentDuration ? "✅ " : ""}${d}s`,
+              callback_data: `duration:${d}`,
+            })),
+          ],
+        }
       }
     );
   }
@@ -141,7 +147,7 @@ export class TelegramHandler {
       const langInfo = LANGUAGES.find(l => l.code === arg);
       if (langInfo) {
         await this.supabase.from("studios").update({ language: arg }).eq("id", this.studio.id);
-        await this.bot.sendMessage(chatId, `✅ Language successfully changed to: ${langInfo.label} (*${arg.toUpperCase()}*)`);
+        await this.bot.sendMessage(chatId, `✅ Language successfully changed to: ${langInfo.label} (*${arg.toUpperCase()}*)`, { parseMode: "Markdown" });
       } else {
         await this.bot.sendMessage(chatId, `⚠️ Language "${arg}" is not recognized. Type /lang to see options.`);
       }
@@ -159,7 +165,10 @@ export class TelegramHandler {
     }
 
     await this.bot.sendMessage(chatId, "🌐 *Choose Output Language:*", {
-      inline_keyboard: rows,
+      parseMode: "Markdown",
+      replyMarkup: {
+        inline_keyboard: rows,
+      }
     });
   }
 
@@ -188,9 +197,9 @@ export class TelegramHandler {
     if ((DURATIONS as readonly number[]).includes(secs)) {
       await this.supabase.from("studios").update({ video_duration: secs }).eq("id", this.studio.id);
       await this.bot.answerCallbackQuery(cbId, `✅ Duration → ${secs}s`);
-      await this.bot.sendMessage(chatId, `✅ Video duration successfully changed to *${secs} seconds*.`);
+      await this.bot.sendMessage(chatId, `✅ Video duration successfully changed to *${secs} seconds*.`, { parseMode: "Markdown" });
     } else {
-      await this.bot.answerCallbackQuery(cbId, "❌ Pilihan tidak valid");
+      await this.bot.answerCallbackQuery(cbId, "❌ Invalid option");
     }
   }
 
@@ -199,10 +208,10 @@ export class TelegramHandler {
     const langInfo = LANGUAGES.find(l => l.code === langCode);
     if (langInfo) {
       await this.supabase.from("studios").update({ language: langCode }).eq("id", this.studio.id);
-      await this.bot.answerCallbackQuery(cbId, `✅ Bahasa → ${langInfo.label}`);
-      await this.bot.sendMessage(chatId, `✅ Language successfully changed to: ${langInfo.label} (*${langCode.toUpperCase()}*)`);
+      await this.bot.answerCallbackQuery(cbId, `✅ Language → ${langInfo.label}`);
+      await this.bot.sendMessage(chatId, `✅ Language successfully changed to: ${langInfo.label} (*${langCode.toUpperCase()}*)`, { parseMode: "Markdown" });
     } else {
-      await this.bot.answerCallbackQuery(cbId, "❌ Bahasa tidak valid");
+      await this.bot.answerCallbackQuery(cbId, "❌ Invalid language");
     }
   }
 

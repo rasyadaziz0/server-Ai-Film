@@ -7,6 +7,7 @@ import { aiRouter } from "./routes/ai.router";
 import { secretsRouter } from "./routes/secrets.router";
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = parseInt(process.env.PORT || "4000", 10);
 
 // --- CORS: Only allow exact production Vercel domain ---

@@ -11,6 +11,12 @@ export function getRedisConnection(): IORedis {
 }
 
 /**
+ * Singleton Redis connection specifically for rate limiting.
+ * Isolated from BullMQ to prevent blocking calls (BRPOPLPUSH) from causing timeout errors.
+ */
+export const rateLimitRedis = new IORedis(process.env.REDIS_URL || "redis://redis:6379");
+
+/**
  * Pipeline execution queue.
  * Jobs contain: { jobId, studioId, targetNodeId?, source }
  */

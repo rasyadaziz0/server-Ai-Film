@@ -1,22 +1,37 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { verifyJwt, verifyStudioOwnership, verifyStudioAccess, AuthError } from "../../lib/auth";
+import { verifyJwt, verifyStudioOwnership, verifyStudioAccess, AuthError, requireJwt } from "../../lib/auth";
 import rateLimit from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
-import { getRedisConnection } from "../../worker/queues";
+import { rateLimitRedis } from "../../worker/queues";
 
 export const aiRouter = Router();
 
-// Rate limiter: 10 uploads per 15 minutes per IP
+// Rate limiter: 10 uploads per 15 minutes per user
 const uploadRateLimiter = rateLimit({
   store: new RedisStore({
     sendCommand: (...args: string[]) => {
-      const client = getRedisConnection();
-      return client.call(args[0], ...args.slice(1)) as any;
+      return rateLimitRedis.call(args[0], ...args.slice(1)) as any;
     },
   }),
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
-  message: { error: "Terlalu banyak permintaan unggahan. Silakan coba lagi nanti." },
+  keyGenerator: (req: any) => req.user?.sub || req.ip,
+  message: { error: "Too many upload requests. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiter: 5 image generations per 1 minute per user
+const imageRateLimiter = rateLimit({
+  store: new RedisStore({
+    sendCommand: (...args: string[]) => {
+      return rateLimitRedis.call(args[0], ...args.slice(1)) as any;
+    },
+  }),
+  windowMs: 60 * 1000, // 1 minute
+  max: 5,
+  keyGenerator: (req: any) => req.user?.sub || req.ip,
+  message: { error: "Too many image generation requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -28,10 +43,11 @@ const uploadRateLimiter = rateLimit({
  */
 aiRouter.post(
   "/upload-actor/presign",
+  requireJwt,
   uploadRateLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const user = await verifyJwt(req.headers.authorization);
+      const user = (req as any).user;
       const { studioId, contentType } = req.body;
 
       if (!studioId || !contentType) {
@@ -47,7 +63,7 @@ aiRouter.post(
 
       const ext = allowedTypes[contentType];
       if (!ext) {
-        return res.status(400).json({ error: "Hanya gambar PNG, JPEG, dan WEBP yang diizinkan" });
+        return res.status(400).json({ error: "Only PNG, JPEG, and WEBP images are allowed" });
       }
 
       await verifyStudioAccess(studioId, user.sub, 'editor', user.email);
@@ -84,9 +100,11 @@ aiRouter.post(
  */
 aiRouter.post(
   "/generate-image",
+  requireJwt,
+  imageRateLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const user = await verifyJwt(req.headers.authorization);
+      const user = (req as any).user;
       const { studioId, prompt } = req.body;
 
       if (!prompt) {
@@ -108,14 +126,14 @@ aiRouter.post(
       const { getServiceSupabase } = await import("../../lib/supabase");
       const { getDailyLimitMicroUsd } = await import("../../lib/budget");
       
-      const IMAGE_COST = 0.05; // USD
+      const IMAGE_COST = 50_000; // micro-USD
       const serviceSupabase = getServiceSupabase();
       
       const { data: rpcResult, error: rpcError } = await serviceSupabase.rpc("reserve_image_spend", {
         p_studio_id: studioId,
         p_user_id: user.sub,
         p_cost: IMAGE_COST,
-        p_daily_limit: 5.0 // USD
+        p_daily_limit: getDailyLimitMicroUsd()
       });
 
       if (rpcError) {

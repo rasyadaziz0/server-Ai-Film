@@ -19,7 +19,7 @@ function startWatchdog() {
         .from("jobs")
         .select("id, source, chat_id, studio_id")
         .eq("status", "running")
-        .lt("heartbeat_at", staleThreshold);
+        .or(`heartbeat_at.lt.${staleThreshold},heartbeat_at.is.null`);
 
       if (stuckJobs && stuckJobs.length > 0) {
         console.log(`[Watchdog] Found ${stuckJobs.length} stuck jobs. Recovering...`);

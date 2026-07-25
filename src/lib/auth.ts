@@ -168,3 +168,19 @@ export class AuthError extends Error {
     this.name = "AuthError";
   }
 }
+
+/**
+ * Express middleware to verify JWT and attach user payload to the request object.
+ * This guarantees req.user is available for subsequent middlewares like rate limiters.
+ */
+export const requireJwt = async (req: any, res: any, next: any) => {
+  try {
+    req.user = await verifyJwt(req.headers.authorization);
+    next();
+  } catch (err: any) {
+    if (err instanceof AuthError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
+    next(err);
+  }
+};

@@ -11,6 +11,7 @@ services:
       - "80:80"
       - "443:443"
       - "443:443/udp" # HTTP/3
+    env_file: .env
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -32,8 +33,6 @@ services:
       - NODE_ENV=production
       - PORT=4000
       - REDIS_URL=redis://:${REDIS_PASSWORD:-supersecret}@redis:6379
-    ports:
-      - "4000:4000"
     dns:
       - 8.8.8.8
       - 1.1.1.1

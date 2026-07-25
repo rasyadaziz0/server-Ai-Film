@@ -33,7 +33,7 @@ export class TelegramBot {
     this.relaySecret = process.env.TELEGRAM_RELAY_SECRET;
   }
 
-  async sendMessage(chatId: string, text: string, replyMarkup?: object): Promise<void> {
+  async sendMessage(chatId: string, text: string, opts?: { replyMarkup?: object, parseMode?: string, disablePreview?: boolean }): Promise<void> {
     try {
       await fetch(`${this.apiBase}/bot${this.botToken}/sendMessage`, {
         method: "POST",
@@ -44,7 +44,9 @@ export class TelegramBot {
         body: JSON.stringify({
           chat_id: chatId,
           text,
-          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+          ...(opts?.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
+          ...(opts?.parseMode ? { parse_mode: opts.parseMode } : {}),
+          ...(opts?.disablePreview !== undefined ? { disable_web_page_preview: opts.disablePreview } : {}),
         }),
       });
     } catch (e: any) {
