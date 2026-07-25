@@ -2,6 +2,7 @@ import "dotenv/config";
 import { startOutboxDispatcher } from "./outboxDispatcher";
 import { startPipelineWorker } from "./pipelineWorker";
 import { getServiceSupabase } from "../lib/supabase";
+import { startTelegramPollWorker } from "./telegramPollWorker";
 
 /**
  * Watchdog: Every 1 minute, finds jobs stuck in 'running' 
@@ -76,6 +77,9 @@ async function main(): Promise<void> {
 
   // 3. Start Watchdog
   startWatchdog();
+
+  // 4. Start Telegram Polling Worker
+  startTelegramPollWorker();
 
   console.log("[Worker] All services started successfully");
 
