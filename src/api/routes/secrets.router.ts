@@ -81,30 +81,18 @@ secretsRouter.post(
       const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
       const relaySecret = process.env.TELEGRAM_RELAY_SECRET;
 
-      // Step 1: Register webhook with Telegram FIRST (before saving to DB)
+      // Step 1: Delete webhook to allow Long Polling to work
       if (botToken && telegramMode !== "none") {
         try {
-          const tgRes = await fetch(`${telegramApi}/bot${botToken}/setWebhook`, {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
-            },
-            body: JSON.stringify({
-              url: webhookUrl,
-              secret_token: webhookSecret,
-              allowed_updates: ["message", "edited_message", "callback_query"]
-            })
-          });
+          const tgRes = await fetch(`${telegramApi}/bot${botToken}/deleteWebhook`);
           
           const tgData = await tgRes.json();
           if (!tgData.ok) {
-             console.error("[Secrets] Telegram setWebhook failed:", tgData);
-             return res.status(400).json({ error: `Telegram Error: ${tgData.description}` });
+             console.warn("[Secrets] Telegram deleteWebhook returned false:", tgData);
           }
         } catch (tgErr: any) {
           console.error("[Secrets] Failed to contact Telegram API:", tgErr);
-          return res.status(500).json({ error: "Failed to contact Telegram API to setWebhook" });
+          return res.status(500).json({ error: "Failed to contact Telegram API to deleteWebhook" });
         }
       }
 
