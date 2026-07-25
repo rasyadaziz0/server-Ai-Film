@@ -15,7 +15,10 @@ telegramRouter.post(
       const { publicWebhookId } = req.params;
       const secretToken = req.headers["x-telegram-bot-api-secret-token"] as string | undefined;
 
+      console.log(`[Telegram Webhook] Received hit for ${publicWebhookId}, secretToken present: ${!!secretToken}`);
+
       if (!publicWebhookId || !secretToken) {
+        console.warn(`[Telegram Webhook] Rejected: Missing webhook ID or secret token`);
         return res.status(403).send("Forbidden");
       }
 
@@ -33,6 +36,7 @@ telegramRouter.post(
       // ── 2. Verify HMAC ──
       const incomingHash = hmacSha256(secretToken);
       if (!secrets.webhook_secret_hash || !constantTimeEqual(incomingHash, secrets.webhook_secret_hash)) {
+        console.warn(`[Telegram Webhook] Rejected: Invalid HMAC signature for ${publicWebhookId}`);
         return res.status(403).send("Invalid secret");
       }
 
@@ -80,12 +84,18 @@ telegramRouter.post(
       const text = req.body.message?.text || req.body.edited_message?.text;
       const updateId = req.body.update_id?.toString();
 
-      if (!chatId) return res.sendStatus(200);
+      if (!chatId) {
+        console.log(`[Telegram Webhook] Ignored: No chatId found in payload`);
+        return res.sendStatus(200);
+      }
 
       // Chat ID allowlist
       if (studio.telegram_chat_id && studio.telegram_chat_id !== chatId) {
+        console.log(`[Telegram Webhook] Ignored: Unauthorized chatId ${chatId} (expected ${studio.telegram_chat_id})`);
         return res.sendStatus(200);
       }
+
+      console.log(`[Telegram Webhook] Processing message from ${chatId}: ${text}`);
 
       // ── B1) Commands ──
       if (text && text.startsWith("/")) {
