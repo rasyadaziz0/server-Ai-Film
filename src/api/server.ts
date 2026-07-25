@@ -10,7 +10,7 @@ const app = express();
 const PORT = parseInt(process.env.PORT || "4000", 10);
 
 // --- CORS: Only allow exact production Vercel domain ---
-const allowedOrigins = (process.env.ALLOWED_ORIGIN || "http://localhost:3000").split(",").map(s => s.trim());
+const allowedOrigins = (process.env.ALLOWED_ORIGIN || "http://localhost:3000,https://www.acadlabs.fun").split(",").map(s => s.trim());
 
 app.use(cors({
   origin: (origin, callback) => {

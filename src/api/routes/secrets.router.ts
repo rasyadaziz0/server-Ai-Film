@@ -74,7 +74,7 @@ secretsRouter.post(
         secretsPayload.key_version = encryptedData.key_version;
       }
 
-      const apiDomain = "www.acadlabs.fun/backend";
+      const apiDomain = "api.acadlabs.fun";
       const webhookUrl = `https://${apiDomain}/v1/telegram/webhook/${publicWebhookId}`;
       const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
       const relaySecret = process.env.TELEGRAM_RELAY_SECRET;
