@@ -32,8 +32,8 @@ services:
       - NODE_ENV=production
       - PORT=4000
       - REDIS_URL=redis://:${REDIS_PASSWORD:-supersecret}@redis:6379
-    expose:
-      - "4000"
+    ports:
+      - "4000:4000"
     dns:
       - 8.8.8.8
       - 1.1.1.1
