@@ -130,12 +130,24 @@ jobsRouter.post("/reset", async (req: Request, res: Response, next: NextFunction
 
     const supabase = getServiceSupabase();
 
-    // Reset stuck jobs
+    const staleThreshold = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+    // Reset stuck jobs — only zero reserved_cost when heartbeat is stale (worker is truly dead)
+    // Jobs with NULL heartbeat_at never started execution (stuck in pending), treat as stale
     await supabase
       .from("jobs")
       .update({ status: "error", error: "Reset by user", reserved_cost: 0, updated_at: new Date().toISOString() })
       .eq("studio_id", studioId)
-      .in("status", ["pending", "running", "polling"]);
+      .in("status", ["pending", "running", "polling"])
+      .or(`heartbeat_at.is.null,heartbeat_at.lt.${staleThreshold}`);
+
+    // Jobs with fresh heartbeat — mark as error but keep reserved_cost (worker may still be spending)
+    await supabase
+      .from("jobs")
+      .update({ status: "error", error: "Reset by user", updated_at: new Date().toISOString() })
+      .eq("studio_id", studioId)
+      .in("status", ["pending", "running", "polling"])
+      .gte("heartbeat_at", staleThreshold);
 
     // Reset stuck nodes
     await supabase

@@ -25,14 +25,14 @@ services:
     build:
       context: ..
       dockerfile: ecs/Dockerfile.api
+      args:
+        - FRONTEND_SHA=${FRONTEND_SHA}
     restart: unless-stopped
     env_file: .env
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - REDIS_URL=redis://redis:6379
-    ports:
-      - "4000:4000"
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-supersecret}@redis:6379
     expose:
       - "4000"
     dns:
@@ -49,11 +49,13 @@ services:
     build:
       context: ..
       dockerfile: ecs/Dockerfile.worker
+      args:
+        - FRONTEND_SHA=${FRONTEND_SHA}
     restart: unless-stopped
     env_file: .env
     environment:
       - NODE_ENV=production
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-supersecret}@redis:6379
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -67,13 +69,13 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction --requirepass "${REDIS_PASSWORD:-supersecret}"
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-supersecret}", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5

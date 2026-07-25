@@ -6,9 +6,12 @@ RUN npm install --no-audit --no-fund --ignore-scripts && ln -s /app/ecs/node_mod
 COPY ecs/tsconfig.json ./
 COPY ecs/src/ ./src/
 
-RUN apk add --no-cache git && \
-    git clone https://ghfast.top/https://github.com/rasyadaziz0/AI-film-studio.git /tmp/frontend && \
-    cp -r /tmp/frontend/src ../src && \
+ARG FRONTEND_SHA
+RUN if [ -z "$FRONTEND_SHA" ]; then echo "FRONTEND_SHA is required" && exit 1; fi && \
+    apk add --no-cache git && \
+    git clone https://github.com/rasyadaziz0/AI-film-studio.git /tmp/frontend && \
+    cd /tmp/frontend && git checkout $FRONTEND_SHA && \
+    cp -r /tmp/frontend/src /app/src && \
     rm -rf /tmp/frontend
 
 RUN npx tsc
@@ -17,9 +20,10 @@ FROM node:22-alpine
 WORKDIR /app/ecs
 # FFmpeg binary for video stitching and audio muxing
 RUN apk add --no-cache tini ffmpeg
-COPY --from=builder /app/ecs/dist ./dist
-COPY --from=builder /app/ecs/node_modules ./node_modules
-COPY ecs/package.json ./package.json
+COPY --chown=node:node --from=builder /app/ecs/dist ./dist
+COPY --chown=node:node --from=builder /app/ecs/node_modules ./node_modules
+COPY --chown=node:node ecs/package.json ./package.json
 ENV NODE_ENV=production
 ENTRYPOINT ["/sbin/tini", "--"]
+USER node
 CMD ["node", "dist/ecs/src/worker/index.js"]

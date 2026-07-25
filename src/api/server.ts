@@ -16,11 +16,10 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow no-origin requests (server-to-server, health checks)
     if (!origin) return callback(null, true);
+    // Exact match against ALLOWED_ORIGIN env var only
     if (origin === allowedOrigin) return callback(null, true);
     // Allow localhost in development
-    if (origin === "http://localhost:3000") return callback(null, true);
-    // Allow Vercel deployments and API domain for testing
-    if (origin.endsWith(".vercel.app") || origin === "https://api.acadlabs.fun") return callback(null, true);
+    if (process.env.NODE_ENV !== "production" && origin === "http://localhost:3000") return callback(null, true);
     callback(new Error(`CORS: Origin ${origin} not allowed`));
   },
   credentials: true,

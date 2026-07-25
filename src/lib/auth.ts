@@ -93,7 +93,10 @@ export async function verifyStudioAccess(
       .eq("studio_id", studioId);
 
     if (userEmail) {
-      collabQuery.or(`user_id.eq.${userId},user_email.eq.${userEmail}`);
+      // Quote values to prevent PostgREST filter injection via special characters in email
+      const safeUserId = userId.replace(/"/g, '""');
+      const safeEmail = userEmail.replace(/"/g, '""');
+      collabQuery.or(`user_id.eq."${safeUserId}",user_email.eq."${safeEmail}"`);
     } else {
       collabQuery.eq("user_id", userId);
     }

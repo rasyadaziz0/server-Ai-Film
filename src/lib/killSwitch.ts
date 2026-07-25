@@ -1,7 +1,12 @@
 
+/**
+ * Unified Kill Switch — fail-closed.
+ * If AI_GENERATION_ENABLED is not explicitly "true", all generation is blocked.
+ * This matches the frontend check in requireAuth.ts for consistency.
+ */
 export function checkKillSwitch(): void {
-  if (process.env.KILL_SWITCH === "1" || process.env.KILL_SWITCH === "true") {
-    throw new KillSwitchError("Kill switch is active. All AI generation is paused.");
+  if (process.env.AI_GENERATION_ENABLED !== "true") {
+    throw new KillSwitchError("AI generation is disabled. Set AI_GENERATION_ENABLED=true to enable.");
   }
 }
 

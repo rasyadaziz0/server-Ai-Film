@@ -9,13 +9,6 @@ interface PipelineJobData {
   source: string;
 }
 
-/**
- * Pipeline Worker
- * 
- * Consumes pipeline-queue jobs and executes the AI agent pipeline.
- * Uses ServerEngine for actual node execution.
- * Updates heartbeat_at for watchdog monitoring.
- */
 export function startPipelineWorker(): Worker {
   const worker = new Worker<PipelineJobData>(
     "pipeline-queue",
@@ -47,13 +40,14 @@ export function startPipelineWorker(): Worker {
         try {
           // Import and run the shared ServerEngine
           const { ServerEngine } = await import("../../../src/lib/engine/ServerEngine");
-          const engine = new ServerEngine(studioId, jobId);
+          const isResume = source === "video-poll-resume";
+          const engine = new ServerEngine(studioId, jobId, undefined, isResume);
 
           if (targetNodeId) {
             console.log(`[PipelineWorker] Single node execution: ${targetNodeId}`);
             await engine.runSingleNode(targetNodeId);
           } else {
-            console.log(`[PipelineWorker] Running full pipeline for studio ${studioId}`);
+            console.log(`[PipelineWorker] Running ${isResume ? "RESUMED" : "full"} pipeline for studio ${studioId}`);
             await engine.runPipeline();
           }
 
@@ -75,10 +69,61 @@ export function startPipelineWorker(): Worker {
           })
           .eq("id", jobId);
       }
+
+      // --- Post-execution: Auto-send Telegram Notification ---
+      const { data: jobInfo } = await supabase
+        .from("jobs")
+        .select("source, chat_id, status, result_url, error")
+        .eq("id", jobId)
+        .single();
+
+      if (jobInfo?.source === "telegram") {
+        // Fallback chat_id to studio config if job missing it
+        let targetChatId = jobInfo.chat_id;
+        if (!targetChatId) {
+          const { data: studio } = await supabase.from("studios").select("telegram_chat_id").eq("id", studioId).single();
+          targetChatId = studio?.telegram_chat_id;
+        }
+
+        if (targetChatId) {
+          // Guard: don't double-send if a telegram node is already in the canvas
+          const { count } = await supabase
+            .from("nodes")
+            .select("*", { count: "exact", head: true })
+            .eq("studio_id", studioId)
+            .eq("type", "telegram");
+
+          if (count === 0 || jobInfo.status === "error") {
+            try {
+              const { data: secrets } = await supabase
+                .from("studio_secrets")
+                .select("encrypted_bot_token, iv, auth_tag, key_version")
+                .eq("studio_id", studioId)
+                .single();
+
+              if (secrets?.encrypted_bot_token) {
+                const { TelegramBot } = await import("../lib/telegram/TelegramBot");
+                const bot = new TelegramBot(secrets as any);
+
+                if (jobInfo.status === "done" && jobInfo.result_url && count === 0) {
+                  console.log(`[PipelineWorker] Auto-sending video to Telegram for job ${jobId}`);
+                  // Note: URL send works up to 20MB in Telegram
+                  await bot.sendMediaByUrl(targetChatId, "sendVideo", jobInfo.result_url, "🎥 AI Film Studio — Pipeline Selesai!\n\nVideo Anda sudah jadi.");
+                } else if (jobInfo.status === "error") {
+                  console.log(`[PipelineWorker] Auto-sending error to Telegram for job ${jobId}`);
+                  await bot.sendMessage(targetChatId, `❌ Pipeline gagal:\n\n${jobInfo.error || "Unknown error"}`);
+                }
+              }
+            } catch (notifyErr: any) {
+              console.error(`[PipelineWorker] Failed to send auto-notification:`, notifyErr.message);
+            }
+          }
+        }
+      }
     },
     {
       connection: getRedisConnection() as any,
-      concurrency: 1, // Process one pipeline at a time (FFmpeg constraint)
+      concurrency: 3, // Safe limit for FFmpeg overhead on VPS without OOM/starvation
     }
   );
 

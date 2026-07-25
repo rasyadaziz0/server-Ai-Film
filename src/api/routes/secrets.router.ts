@@ -74,6 +74,43 @@ secretsRouter.post(
         secretsPayload.key_version = encryptedData.key_version;
       }
 
+      const apiDomain = process.env.API_DOMAIN;
+      if (!apiDomain || apiDomain.includes("yourdomain.com")) {
+        return res.status(400).json({ error: "API_DOMAIN belum disetel di .env backend. Telegram membutuhkan domain HTTPS." });
+      }
+      
+      const webhookUrl = `https://${apiDomain}/v1/telegram/webhook/${publicWebhookId}`;
+      const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
+      const relaySecret = process.env.TELEGRAM_RELAY_SECRET;
+
+      // Step 1: Register webhook with Telegram FIRST (before saving to DB)
+      if (botToken && telegramMode !== "none") {
+        try {
+          const tgRes = await fetch(`${telegramApi}/bot${botToken}/setWebhook`, {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
+            },
+            body: JSON.stringify({
+              url: webhookUrl,
+              secret_token: webhookSecret,
+              allowed_updates: ["message", "edited_message", "callback_query"]
+            })
+          });
+          
+          const tgData = await tgRes.json();
+          if (!tgData.ok) {
+             console.error("[Secrets] Telegram setWebhook failed:", tgData);
+             return res.status(400).json({ error: `Telegram Error: ${tgData.description}` });
+          }
+        } catch (tgErr: any) {
+          console.error("[Secrets] Failed to contact Telegram API:", tgErr);
+          return res.status(500).json({ error: "Gagal menghubungi Telegram API untuk setWebhook" });
+        }
+      }
+
+      // Step 2: Only after setWebhook succeeds → upsert secrets to DB
       const { error: upsertErr } = await supabase
         .from("studio_secrets")
         .upsert(secretsPayload, { onConflict: "studio_id" });
@@ -93,31 +130,9 @@ secretsRouter.post(
         })
         .eq("id", studioId);
 
-      const apiDomain = process.env.API_DOMAIN;
-      if (!apiDomain || apiDomain.includes("yourdomain.com")) {
-        return res.status(400).json({ error: "API_DOMAIN belum disetel di .env backend. Telegram membutuhkan domain HTTPS." });
-      }
-      
-      const webhookUrl = `https://${apiDomain}/v1/telegram/webhook/${publicWebhookId}`;
-      const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
-      const relaySecret = process.env.TELEGRAM_RELAY_SECRET;
-
-      // Auto-register webhook with Telegram
+      // Step 3: Post-save actions (setMyCommands + welcome message)
       if (botToken && telegramMode !== "none") {
         try {
-          const tgRes = await fetch(`${telegramApi}/bot${botToken}/setWebhook`, {
-            method: "POST",
-            headers: { 
-              "Content-Type": "application/json",
-              ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
-            },
-            body: JSON.stringify({
-              url: webhookUrl,
-              secret_token: webhookSecret,
-              allowed_updates: ["message", "edited_message", "callback_query"]
-            })
-          });
-          
           // Setup custom Telegram Menu commands
           await fetch(`${telegramApi}/bot${botToken}/setMyCommands`, {
             method: "POST",
@@ -134,7 +149,7 @@ secretsRouter.post(
             })
           });
           
-          // Send a welcome connection message to the user!
+          // Send welcome message only after everything is confirmed working
           if (chatId) {
              await fetch(`${telegramApi}/bot${botToken}/sendMessage`, {
                method: "POST",
@@ -149,15 +164,9 @@ secretsRouter.post(
                })
              });
           }
-          
-          const tgData = await tgRes.json();
-          if (!tgData.ok) {
-             console.error("[Secrets] Telegram setWebhook failed:", tgData);
-             return res.status(400).json({ error: `Telegram Error: ${tgData.description}` });
-          }
-        } catch (tgErr: any) {
-          console.error("[Secrets] Failed to contact Telegram API:", tgErr);
-          return res.status(500).json({ error: "Gagal menghubungi Telegram API untuk setWebhook" });
+        } catch (postErr: any) {
+          // Non-fatal: webhook is already registered, commands/welcome are best-effort
+          console.warn("[Secrets] Post-webhook actions failed:", postErr.message);
         }
       }
 

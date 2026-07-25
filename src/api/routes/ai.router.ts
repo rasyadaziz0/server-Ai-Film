@@ -1,7 +1,25 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { verifyJwt, verifyStudioOwnership, verifyStudioAccess, AuthError } from "../../lib/auth";
+import rateLimit from "express-rate-limit";
+import { RedisStore } from "rate-limit-redis";
+import { getRedisConnection } from "../../worker/queues";
 
 export const aiRouter = Router();
+
+// Rate limiter: 10 uploads per 15 minutes per IP
+const uploadRateLimiter = rateLimit({
+  store: new RedisStore({
+    sendCommand: (...args: string[]) => {
+      const client = getRedisConnection();
+      return client.call(args[0], ...args.slice(1)) as any;
+    },
+  }),
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: "Terlalu banyak permintaan unggahan. Silakan coba lagi nanti." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 /**
  * POST /v1/ai/upload-actor/presign
@@ -10,27 +28,38 @@ export const aiRouter = Router();
  */
 aiRouter.post(
   "/upload-actor/presign",
+  uploadRateLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = await verifyJwt(req.headers.authorization);
-      const { studioId, filename, contentType } = req.body;
+      const { studioId, contentType } = req.body;
 
-      if (!studioId || !filename || !contentType) {
-        return res.status(400).json({ error: "studioId, filename, and contentType are required" });
+      if (!studioId || !contentType) {
+        return res.status(400).json({ error: "studioId and contentType are required" });
       }
 
-      // Validate content type
-      if (!contentType.startsWith("image/")) {
-        return res.status(400).json({ error: "Only image uploads are allowed" });
+      // Strict allowlist to prevent Stored XSS via SVG or arbitrary files
+      const allowedTypes: Record<string, string> = {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/webp": ".webp"
+      };
+
+      const ext = allowedTypes[contentType];
+      if (!ext) {
+        return res.status(400).json({ error: "Hanya gambar PNG, JPEG, dan WEBP yang diizinkan" });
       }
 
       await verifyStudioAccess(studioId, user.sub, 'editor', user.email);
+
+      // Server-generated safe filename
+      const safeFilename = `${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`;
 
       // Use Cloudflare R2 instead of Alibaba OSS
       const { CloudflareR2 } = await import("../../../../src/lib/cloud/CloudflareR2");
       const result = await CloudflareR2.generatePresignedUpload(
         `actor-images/${studioId}`,
-        filename,
+        safeFilename,
         contentType
       );
 
@@ -64,13 +93,42 @@ aiRouter.post(
         return res.status(400).json({ error: "prompt is required" });
       }
 
-      if (studioId) {
-        await verifyStudioAccess(studioId, user.sub, 'editor', user.email);
+      if (!studioId) {
+        return res.status(400).json({ error: "studioId is required" });
       }
+
+      await verifyStudioAccess(studioId, user.sub, 'editor', user.email);
 
       const apiKey = process.env.DASHSCOPE_API_KEY;
       if (!apiKey) {
         return res.status(500).json({ error: "DASHSCOPE_API_KEY not configured" });
+      }
+
+      // Check budget before generating
+      const { getServiceSupabase } = await import("../../lib/supabase");
+      const { getDailyLimitMicroUsd } = await import("../../lib/budget");
+      
+      const IMAGE_COST = 0.05; // USD
+      const serviceSupabase = getServiceSupabase();
+      
+      const { data: rpcResult, error: rpcError } = await serviceSupabase.rpc("reserve_image_spend", {
+        p_studio_id: studioId,
+        p_user_id: user.sub,
+        p_cost: IMAGE_COST,
+        p_daily_limit: 5.0 // USD
+      });
+
+      if (rpcError) {
+        console.error("[AIRouter] Budget RPC Error:", rpcError);
+        return res.status(500).json({ error: "Gagal memverifikasi limit harian" });
+      }
+
+      const budgetStatus = rpcResult as any;
+      if (budgetStatus.error === "daily_budget_exceeded") {
+        return res.status(429).json({ error: "Daily budget exceeded for image generation" });
+      }
+      if (budgetStatus.error === "studio_not_found") {
+        return res.status(403).json({ error: "Studio not found" });
       }
 
       console.log(`[AIRouter] Generating image for prompt: "${prompt.substring(0, 50)}..."`);

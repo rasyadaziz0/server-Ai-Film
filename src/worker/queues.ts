@@ -23,19 +23,4 @@ export const pipelineQueue = new Queue("pipeline-queue", {
   },
 });
 
-/**
- * Video polling queue for async DashScope Wan 2.7 tasks.
- * Jobs contain: { nodeRunId, taskId, studioId, jobId, nodeId, attempt }
- */
-export const videoPollQueue = new Queue("video-poll-queue", {
-  connection: getRedisConnection() as any,
-  defaultJobOptions: {
-    removeOnComplete: { count: 200 },
-    removeOnFail: { count: 100 },
-    attempts: 60, // Max 60 poll attempts (~10 minutes with backoff)
-    backoff: {
-      type: "exponential",
-      delay: 5000, // Start at 5s, exponential backoff
-    },
-  },
-});
+
