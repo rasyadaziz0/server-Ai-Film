@@ -8,11 +8,11 @@ COPY ecs/src/ ./src/
 
 ARG FRONTEND_SHA
 RUN if [ -z "$FRONTEND_SHA" ]; then echo "FRONTEND_SHA is required" && exit 1; fi && \
-    apk add --no-cache git && \
-    git clone https://github.com/rasyadaziz0/AI-film-studio.git /tmp/frontend && \
-    cd /tmp/frontend && git checkout $FRONTEND_SHA && \
+    wget -qO /tmp/frontend.tar.gz https://github.com/rasyadaziz0/AI-film-studio/archive/${FRONTEND_SHA}.tar.gz && \
+    mkdir -p /tmp/frontend && \
+    tar -xzf /tmp/frontend.tar.gz -C /tmp/frontend --strip-components=1 && \
     cp -r /tmp/frontend/src /app/src && \
-    rm -rf /tmp/frontend
+    rm -rf /tmp/frontend /tmp/frontend.tar.gz
 
 RUN npx tsc
 
