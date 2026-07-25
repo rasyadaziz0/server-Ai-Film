@@ -25,8 +25,7 @@ services:
     build:
       context: ..
       dockerfile: ecs/Dockerfile.api
-      args:
-        - FRONTEND_SHA=${FRONTEND_SHA}
+
     restart: unless-stopped
     env_file: .env
     environment:
@@ -49,8 +48,7 @@ services:
     build:
       context: ..
       dockerfile: ecs/Dockerfile.worker
-      args:
-        - FRONTEND_SHA=${FRONTEND_SHA}
+
     restart: unless-stopped
     env_file: .env
     environment:
