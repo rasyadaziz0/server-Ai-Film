@@ -10,16 +10,19 @@ const app = express();
 const PORT = parseInt(process.env.PORT || "4000", 10);
 
 // --- CORS: Only allow exact production Vercel domain ---
-const allowedOrigin = process.env.ALLOWED_ORIGIN || "http://localhost:3000";
+const allowedOrigins = (process.env.ALLOWED_ORIGIN || "http://localhost:3000").split(",").map(s => s.trim());
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow no-origin requests (server-to-server, health checks)
     if (!origin) return callback(null, true);
-    // Exact match against ALLOWED_ORIGIN env var only
-    if (origin === allowedOrigin) return callback(null, true);
-    // Allow localhost in development
-    if (process.env.NODE_ENV !== "production" && origin === "http://localhost:3000") return callback(null, true);
+    
+    // Always allow localhost for local development & testing against production VPS
+    if (origin.startsWith("http://localhost:")) return callback(null, true);
+    
+    // Match against ALLOWED_ORIGIN env var (supports comma-separated)
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    
     callback(new Error(`CORS: Origin ${origin} not allowed`));
   },
   credentials: true,
@@ -49,7 +52,7 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`[ECS API] Listening on port ${PORT}`);
-  console.log(`[ECS API] CORS allowed origin: ${allowedOrigin}`);
+  console.log(`[ECS API] CORS allowed origin: ${allowedOrigins.join(", ")}`);
 });
 
 export default app;
