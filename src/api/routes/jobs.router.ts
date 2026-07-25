@@ -86,7 +86,7 @@ jobsRouter.post("/", async (req: Request, res: Response, next: NextFunction) => 
       return res.status(200).json({ success: true, jobId: result.job_id, duplicate: true });
     }
     if (result.error === "active_job_exists") {
-      return res.status(409).json({ error: "Studio sudah punya job aktif. Tunggu sampai selesai." });
+      return res.status(409).json({ error: "Studio already has an active job. Wait for it to finish." });
     }
     if (result.error === "daily_budget_exceeded") {
       return res.status(429).json({

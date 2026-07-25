@@ -108,10 +108,10 @@ export function startPipelineWorker(): Worker {
                 if (jobInfo.status === "done" && jobInfo.result_url && count === 0) {
                   console.log(`[PipelineWorker] Auto-sending video to Telegram for job ${jobId}`);
                   // Note: URL send works up to 20MB in Telegram
-                  await bot.sendMediaByUrl(targetChatId, "sendVideo", jobInfo.result_url, "🎥 AI Film Studio — Pipeline Selesai!\n\nVideo Anda sudah jadi.");
+                  await bot.sendMediaByUrl(targetChatId, "sendVideo", jobInfo.result_url, "🎥 AI Film Studio — Pipeline Finished!\n\nYour video is ready.");
                 } else if (jobInfo.status === "error") {
                   console.log(`[PipelineWorker] Auto-sending error to Telegram for job ${jobId}`);
-                  await bot.sendMessage(targetChatId, `❌ Pipeline gagal:\n\n${jobInfo.error || "Unknown error"}`);
+                  await bot.sendMessage(targetChatId, `❌ Pipeline failed:\n\n${jobInfo.error || "Unknown error"}`);
                 }
               }
             } catch (notifyErr: any) {

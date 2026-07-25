@@ -106,7 +106,7 @@ secretsRouter.post(
           }
         } catch (tgErr: any) {
           console.error("[Secrets] Failed to contact Telegram API:", tgErr);
-          return res.status(500).json({ error: "Gagal menghubungi Telegram API untuk setWebhook" });
+          return res.status(500).json({ error: "Failed to contact Telegram API to setWebhook" });
         }
       }
 
@@ -142,9 +142,9 @@ secretsRouter.post(
             },
             body: JSON.stringify({
               commands: [
-                { command: "start", description: "Mulai menggunakan bot" },
-                { command: "help", description: "Tampilkan bantuan & cara pakai" },
-                { command: "status", description: "Cek status render video saat ini" },
+                { command: "start", description: "Start using the bot" },
+                { command: "help", description: "Show help & usage" },
+                { command: "status", description: "Check current video render status" },
               ]
             })
           });
@@ -159,7 +159,7 @@ secretsRouter.post(
                },
                body: JSON.stringify({
                  chat_id: chatId,
-                 text: "🎉 *Koneksi Berhasil!*\n\nStudio AI Anda sekarang telah terhubung dengan Telegram bot ini. Ketik /help untuk melihat menu.",
+                 text: "🎉 *Connection Successful!*\n\nYour AI Studio is now connected to this Telegram bot. Type /help to see the menu.",
                  parse_mode: "Markdown"
                })
              });
@@ -172,7 +172,7 @@ secretsRouter.post(
 
       return res.json({
         success: true,
-        message: "Webhook berhasil didaftarkan ke Telegram secara otomatis!",
+        message: "Webhook successfully registered to Telegram automatically!",
       });
     } catch (err: any) {
       if (err instanceof AuthError) {

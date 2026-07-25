@@ -120,7 +120,7 @@ aiRouter.post(
 
       if (rpcError) {
         console.error("[AIRouter] Budget RPC Error:", rpcError);
-        return res.status(500).json({ error: "Gagal memverifikasi limit harian" });
+        return res.status(500).json({ error: "Failed to verify daily limit" });
       }
 
       const budgetStatus = rpcResult as any;

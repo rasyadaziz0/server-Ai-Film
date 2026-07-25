@@ -52,7 +52,7 @@ function startWatchdog() {
                  const bot = new TelegramBot(secrets as any);
                  await bot.sendMessage(
                    targetChatId,
-                   "❌ Pipeline gagal: Server mengalami crash atau timeout di tengah proses. Silakan coba lagi."
+                   "❌ Pipeline failed: Server crashed or timed out during the process. Please try again."
                  ).catch(e => console.error("[Watchdog] Telegram notif failed", e));
                }
              }
