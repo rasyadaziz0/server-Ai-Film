@@ -20,17 +20,16 @@ export class TelegramHandler {
     await this.bot.sendMessage(
       chatId,
       "🎬 *Welcome to AI Film Studio!*\n\n" +
-        "Ketik ide cerita atau prompt apa saja di sini, dan sistem kami akan otomatis membuatkan naskah dan videonya untuk Anda.\n\n" +
-        "Contoh: _Bikin video tentang T-Rex yang main piano di bulan_\n\n" +
+        "Type any story idea or prompt here, and our system will automatically generate the script and video for you.\n\n" +
+        "Example: _Make a video about a T-Rex playing piano on the moon_\n\n" +
         "*Command:*\n" +
-        "/status — Cek status pipeline & node aktif\n" +
-        "/duration — Ubah durasi video\n" +
+        "/status — Check pipeline & active nodes status\n" +
+        "/duration — Change video duration\n" +
         "/lang — Ubah bahasa output"
     );
   }
 
   async handleStatus(chatId: string): Promise<void> {
-    // Get last job
     const { data: lastJob } = await this.supabase
       .from("jobs")
       .select("status, result_url, error, created_at")
@@ -39,43 +38,72 @@ export class TelegramHandler {
       .limit(1)
       .maybeSingle();
 
-    // Get all nodes with their current status
     const { data: allNodes } = await this.supabase
       .from("nodes")
       .select("type, label, status")
       .eq("studio_id", this.studio.id)
       .order("position_y", { ascending: true });
 
-    let msg = "📊 *Pipeline Status*\n\n";
+    let msg = "📊 *Studio Render Status*\n━━━━━━━━━━━━━━━━━━━━\n\n";
 
-    // Job status
     if (!lastJob) {
-      msg += "Belum ada job yang berjalan di studio ini.\n";
-    } else if (lastJob.status === "done") {
-      msg += `✅ *Job terakhir:* Selesai!\n🎬 ${lastJob.result_url || "(video tersedia)"}\n`;
-    } else if (lastJob.status === "error") {
-      msg += `❌ *Job terakhir:* Gagal\n_${lastJob.error || "Unknown error"}_\n`;
+      msg += "No render jobs have been started in this studio yet.\n";
     } else {
-      msg += `⏳ *Job terakhir:* Sedang diproses (_${lastJob.status}_)\n`;
+      const jobStatusMap: Record<string, string> = {
+        done: "✅ *Selesai (Success)*",
+        error: "❌ *Gagal (Failed)*",
+        running: "⏳ *Sedang Berjalan (Processing)*",
+        pending: "⏱️ *Menunggu (Queued)*",
+        polling: "🔄 *Menerapkan (Polling)*"
+      };
+      
+      msg += `📋 *Status Pipeline:* ${jobStatusMap[lastJob.status] || lastJob.status}\n`;
+      if (lastJob.status === "error") {
+        msg += `*Error Detail:* _${lastJob.error || "Unknown error"}_\n`;
+      } else if (lastJob.status === "done" && lastJob.result_url) {
+        msg += `🎬 [Lihat Video Hasil Rendering](${lastJob.result_url})\n`;
+      }
     }
 
-    // Node-level status
     if (allNodes && allNodes.length > 0) {
-      msg += "\n*Node Status:*\n";
+      msg += "\n⚙️ *Detail Proses AI (Nodes):*\n";
+      
+      const PRETTY_TYPES: Record<string, string> = {
+        producer: "Ideation",
+        writer: "Scripting",
+        reviewer: "Review",
+        actor: "Character",
+        tts: "Voice-over",
+        video: "Renderer",
+        telegram: "Delivery",
+        telegram_trigger: "Trigger",
+        cloud: "Storage",
+        input: "Prompt",
+      };
 
       for (const node of allNodes) {
         const icon = this.statusIcon(node.status);
-        const emoji = NODE_EMOJI[node.type] || "🔲";
-        const name = node.label || node.type;
-        msg += `  ${icon} ${emoji} ${name} — _${node.status}_\n`;
+        const typeName = PRETTY_TYPES[node.type] || node.type;
+        
+        let name = node.label || node.type;
+        if (name.startsWith("New ")) name = name.replace("New ", "");
+        if (name.length > 25) name = name.substring(0, 22) + "...";
+        
+        msg += `${icon} *${typeName}:* _${name}_\n`;
       }
 
       const doneCount = allNodes.filter((n: any) => n.status === "done").length;
-      const runningCount = allNodes.filter((n: any) => n.status === "running").length;
-      msg += `\n_(${doneCount}/${allNodes.length} selesai${runningCount > 0 ? `, ${runningCount} sedang berjalan` : ""})_`;
+      const totalCount = allNodes.length;
+      
+      let progressStr = "░░░░░░░░░░";
+      if (totalCount > 0) {
+        const percent = Math.round((doneCount / totalCount) * 10);
+        progressStr = "█".repeat(percent) + "░".repeat(10 - percent);
+      }
+      msg += `\n📈 *Progress:* \`${progressStr}\` (${doneCount}/${totalCount})\n`;
     }
 
-    await this.bot.sendMessage(chatId, msg);
+    await this.bot.sendMessage(chatId, msg, { disable_web_page_preview: true });
   }
 
   async handleDuration(chatId: string, arg?: string): Promise<void> {
@@ -84,9 +112,9 @@ export class TelegramHandler {
       const secs = parseInt(arg);
       if ((DURATIONS as readonly number[]).includes(secs)) {
         await this.supabase.from("studios").update({ video_duration: secs }).eq("id", this.studio.id);
-        await this.bot.sendMessage(chatId, `✅ Durasi video berhasil diubah menjadi *${secs} detik*.`);
+        await this.bot.sendMessage(chatId, `✅ Video duration successfully changed to *${secs} seconds*.`);
       } else {
-        await this.bot.sendMessage(chatId, `⚠️ Pilihan durasi: 5, 15, atau 30 detik.`);
+        await this.bot.sendMessage(chatId, `⚠️ Available durations: 5, 15, or 30 seconds.`);
       }
       return;
     }
@@ -95,7 +123,7 @@ export class TelegramHandler {
     const currentDuration = this.studio.video_duration || 5;
     await this.bot.sendMessage(
       chatId,
-      `🎬 *Pilih Durasi Video:*\n\nDurasi saat ini: *${currentDuration} detik*`,
+      `🎬 *Choose Video Duration:*\n\nCurrent duration: *${currentDuration} seconds*`,
       {
         inline_keyboard: [
           DURATIONS.map(d => ({
@@ -113,9 +141,9 @@ export class TelegramHandler {
       const langInfo = LANGUAGES.find(l => l.code === arg);
       if (langInfo) {
         await this.supabase.from("studios").update({ language: arg }).eq("id", this.studio.id);
-        await this.bot.sendMessage(chatId, `✅ Bahasa berhasil diubah menjadi: ${langInfo.label} (*${arg.toUpperCase()}*)`);
+        await this.bot.sendMessage(chatId, `✅ Language successfully changed to: ${langInfo.label} (*${arg.toUpperCase()}*)`);
       } else {
-        await this.bot.sendMessage(chatId, `⚠️ Bahasa "${arg}" tidak dikenali. Ketik /lang untuk melihat pilihan.`);
+        await this.bot.sendMessage(chatId, `⚠️ Language "${arg}" is not recognized. Type /lang to see options.`);
       }
       return;
     }
@@ -130,13 +158,13 @@ export class TelegramHandler {
       rows.push(row);
     }
 
-    await this.bot.sendMessage(chatId, "🌐 *Pilih Bahasa Output:*", {
+    await this.bot.sendMessage(chatId, "🌐 *Choose Output Language:*", {
       inline_keyboard: rows,
     });
   }
 
   async handleUnknownCommand(chatId: string): Promise<void> {
-    await this.bot.sendMessage(chatId, `⚠️ Command tidak dikenali. Ketik /help untuk daftar command.`);
+    await this.bot.sendMessage(chatId, `⚠️ Command not recognized. Type /help for command list.`);
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -159,8 +187,8 @@ export class TelegramHandler {
     const secs = parseInt(data.split(":")[1]);
     if ((DURATIONS as readonly number[]).includes(secs)) {
       await this.supabase.from("studios").update({ video_duration: secs }).eq("id", this.studio.id);
-      await this.bot.answerCallbackQuery(cbId, `✅ Durasi → ${secs}s`);
-      await this.bot.sendMessage(chatId, `✅ Durasi video berhasil diubah menjadi *${secs} detik*.`);
+      await this.bot.answerCallbackQuery(cbId, `✅ Duration → ${secs}s`);
+      await this.bot.sendMessage(chatId, `✅ Video duration successfully changed to *${secs} seconds*.`);
     } else {
       await this.bot.answerCallbackQuery(cbId, "❌ Pilihan tidak valid");
     }
@@ -172,7 +200,7 @@ export class TelegramHandler {
     if (langInfo) {
       await this.supabase.from("studios").update({ language: langCode }).eq("id", this.studio.id);
       await this.bot.answerCallbackQuery(cbId, `✅ Bahasa → ${langInfo.label}`);
-      await this.bot.sendMessage(chatId, `✅ Bahasa berhasil diubah menjadi: ${langInfo.label} (*${langCode.toUpperCase()}*)`);
+      await this.bot.sendMessage(chatId, `✅ Language successfully changed to: ${langInfo.label} (*${langCode.toUpperCase()}*)`);
     } else {
       await this.bot.answerCallbackQuery(cbId, "❌ Bahasa tidak valid");
     }
