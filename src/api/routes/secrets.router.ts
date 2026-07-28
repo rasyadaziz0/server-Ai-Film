@@ -96,6 +96,33 @@ secretsRouter.post(
         }
       }
 
+      // Step 1.5: Register the new webhook
+      if (botToken && telegramMode !== "none") {
+        try {
+          const setRes = await fetch(`${telegramApi}/bot${botToken}/setWebhook`, {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
+            },
+            body: JSON.stringify({
+              url: webhookUrl,
+              secret_token: webhookSecret,
+              allowed_updates: ["message", "edited_message", "callback_query"]
+            })
+          });
+          
+          const setData = await setRes.json();
+          if (!setData.ok) {
+            console.error("[Secrets] Telegram setWebhook failed:", setData);
+            return res.status(400).json({ error: `Telegram Error: ${setData.description}` });
+          }
+        } catch (tgErr: any) {
+          console.error("[Secrets] Failed to contact Telegram API for setWebhook:", tgErr);
+          return res.status(500).json({ error: "Failed to contact Telegram API to setWebhook" });
+        }
+      }
+
       // Step 2: Only after setWebhook succeeds → upsert secrets to DB
       const { error: upsertErr } = await supabase
         .from("studio_secrets")
