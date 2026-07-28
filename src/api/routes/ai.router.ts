@@ -15,7 +15,7 @@ const uploadRateLimiter = rateLimit({
   }),
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
-  keyGenerator: (req: any) => req.user?.sub || (req.ip || "unknown").replace(/:/g, "_"),
+  keyGenerator: (req: any) => req.user?.sub || "anonymous",
   message: { error: "Too many upload requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
@@ -30,7 +30,7 @@ const imageRateLimiter = rateLimit({
   }),
   windowMs: 60 * 1000, // 1 minute
   max: 5,
-  keyGenerator: (req: any) => req.user?.sub || (req.ip || "unknown").replace(/:/g, "_"),
+  keyGenerator: (req: any) => req.user?.sub || "anonymous",
   message: { error: "Too many image generation requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
