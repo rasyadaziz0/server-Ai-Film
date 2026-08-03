@@ -74,21 +74,15 @@ secretsRouter.post(
         secretsPayload.key_version = encryptedData.key_version;
       }
 
-      // We route incoming webhooks through Vercel's Edge rewrites (/backend/*) to bypass GFW which blocks direct Telegram -> China connections.
-      // Edge rewrites are more reliable than Node.js Serverless functions for connecting to China.
+      // ECS Singapore can reach Telegram directly — no proxy needed.
       const frontendUrl = process.env.FRONTEND_URL || "https://acadlabs.fun";
       const webhookUrl = `${frontendUrl}/backend/v1/telegram/webhook/${publicWebhookId}`;
       const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
-      const relaySecret = process.env.TELEGRAM_RELAY_SECRET || process.env.SUPABASE_ANON_KEY;
 
       // Step 1: Delete webhook to allow Long Polling to work
       if (botToken && telegramMode !== "none") {
         try {
-          const tgRes = await fetch(`${telegramApi}/bot${botToken}/deleteWebhook`, {
-            headers: {
-              ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
-            }
-          });
+          const tgRes = await fetch(`${telegramApi}/bot${botToken}/deleteWebhook`);
           
           const tgData = await tgRes.json();
           if (!tgData.ok) {
@@ -107,7 +101,6 @@ secretsRouter.post(
             method: "POST",
             headers: { 
               "Content-Type": "application/json",
-              ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
             },
             body: JSON.stringify({
               url: webhookUrl,
@@ -155,7 +148,6 @@ secretsRouter.post(
             method: "POST",
             headers: { 
               "Content-Type": "application/json",
-              ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
             },
             body: JSON.stringify({
               commands: [
@@ -172,7 +164,6 @@ secretsRouter.post(
                method: "POST",
                headers: { 
                  "Content-Type": "application/json",
-                 ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
                },
                body: JSON.stringify({
                  chat_id: chatId,
