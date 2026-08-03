@@ -74,10 +74,10 @@ secretsRouter.post(
         secretsPayload.key_version = encryptedData.key_version;
       }
 
-      // ECS Singapore can reach Telegram directly — no proxy needed.
+      // ECS Singapore can reach Telegram directly — no proxy needed. Always use direct URL.
       const frontendUrl = process.env.FRONTEND_URL || "https://acadlabs.fun";
       const webhookUrl = `${frontendUrl}/backend/v1/telegram/webhook/${publicWebhookId}`;
-      const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
+      const telegramApi = "https://api.telegram.org";
 
       // Step 1: Delete webhook to allow Long Polling to work
       if (botToken && telegramMode !== "none") {

@@ -19,8 +19,7 @@ export interface BotSecrets {
  */
 export class TelegramBot {
   private readonly botToken: string;
-  private readonly apiBase: string;
-  private readonly relaySecret: string | undefined;
+  private readonly apiBase = "https://api.telegram.org";
 
   constructor(secrets: BotSecrets) {
     this.botToken = decrypt(
@@ -29,8 +28,6 @@ export class TelegramBot {
       secrets.auth_tag,
       secrets.key_version
     );
-    this.apiBase = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
-    this.relaySecret = process.env.TELEGRAM_RELAY_SECRET;
   }
 
   async sendMessage(chatId: string, text: string, opts?: { replyMarkup?: object, parseMode?: string, disablePreview?: boolean }): Promise<void> {
@@ -39,7 +36,6 @@ export class TelegramBot {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(this.relaySecret ? { "x-relay-secret": this.relaySecret } : {}),
         },
         body: JSON.stringify({
           chat_id: chatId,
@@ -61,7 +57,6 @@ export class TelegramBot {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(this.relaySecret ? { "x-relay-secret": this.relaySecret } : {}),
         },
         body: JSON.stringify({
           callback_query_id: callbackQueryId,
@@ -85,7 +80,6 @@ export class TelegramBot {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(this.relaySecret ? { "x-relay-secret": this.relaySecret } : {}),
       },
       body: JSON.stringify(payload),
     });
