@@ -24,13 +24,18 @@ async function pollBot(studio: any, supabase: any) {
 
     const handler = new TelegramHandler(bot, supabase, studio);
 
-    // Ensure webhook is deleted because getUpdates fails if webhook is active
-    const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
-    await fetch(`${telegramApi}/bot${decryptedToken}/deleteWebhook`);
+    // ECS is in China — route through Cloudflare proxy
+    const telegramApi = "https://www.acadlabs.fun/api/telegram-proxy";
+    const relaySecret = "afs-relay-2026-xK9mP";
+    await fetch(`${telegramApi}/bot${decryptedToken}/deleteWebhook`, {
+      headers: { "x-relay-secret": relaySecret }
+    });
 
     let offset = lastUpdateIds.get(studio.id) || 0;
 
-    const res = await fetch(`${telegramApi}/bot${decryptedToken}/getUpdates?offset=${offset}&timeout=5`);
+    const res = await fetch(`${telegramApi}/bot${decryptedToken}/getUpdates?offset=${offset}&timeout=5`, {
+      headers: { "x-relay-secret": relaySecret }
+    });
     if (!res.ok) return;
 
     const data = await res.json();
