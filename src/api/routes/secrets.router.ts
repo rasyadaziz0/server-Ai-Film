@@ -76,7 +76,7 @@ secretsRouter.post(
 
       // We route incoming webhooks through Vercel's Edge rewrites (/backend/*) to bypass GFW which blocks direct Telegram -> China connections.
       // Edge rewrites are more reliable than Node.js Serverless functions for connecting to China.
-      const frontendUrl = "https://www.acadlabs.fun";
+      const frontendUrl = process.env.FRONTEND_URL || "https://acadlabs.fun";
       const webhookUrl = `${frontendUrl}/backend/v1/telegram/webhook/${publicWebhookId}`;
       const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
       const relaySecret = process.env.TELEGRAM_RELAY_SECRET;
