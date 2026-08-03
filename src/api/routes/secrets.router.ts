@@ -79,7 +79,7 @@ secretsRouter.post(
       const frontendUrl = process.env.FRONTEND_URL || "https://acadlabs.fun";
       const webhookUrl = `${frontendUrl}/backend/v1/telegram/webhook/${publicWebhookId}`;
       const telegramApi = process.env.TELEGRAM_API_URL || "https://api.telegram.org";
-      const relaySecret = process.env.TELEGRAM_RELAY_SECRET;
+      const relaySecret = process.env.TELEGRAM_RELAY_SECRET || process.env.SUPABASE_ANON_KEY;
 
       // Step 1: Delete webhook to allow Long Polling to work
       if (botToken && telegramMode !== "none") {
