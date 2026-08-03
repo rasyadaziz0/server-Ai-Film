@@ -55,7 +55,7 @@ async function pollBot(studio: any, supabase: any) {
         
         console.log(`[Telegram Poll] Received message: ${text} for studio ${studio.id}`);
 
-        if (text === "/start") {
+        if (text === "/start" || text === "/help") {
           await handler.handleStart(chatId);
         } else if (text === "/status") {
           await handler.handleStatus(chatId);
