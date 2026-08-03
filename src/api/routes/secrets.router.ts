@@ -84,7 +84,11 @@ secretsRouter.post(
       // Step 1: Delete webhook to allow Long Polling to work
       if (botToken && telegramMode !== "none") {
         try {
-          const tgRes = await fetch(`${telegramApi}/bot${botToken}/deleteWebhook`);
+          const tgRes = await fetch(`${telegramApi}/bot${botToken}/deleteWebhook`, {
+            headers: {
+              ...(relaySecret ? { "x-relay-secret": relaySecret } : {})
+            }
+          });
           
           const tgData = await tgRes.json();
           if (!tgData.ok) {
