@@ -74,15 +74,18 @@ secretsRouter.post(
         secretsPayload.key_version = encryptedData.key_version;
       }
 
-      // ECS Singapore can reach Telegram directly — no proxy needed. Always use direct URL.
+      // ECS is in China — Telegram is blocked. Route through Cloudflare proxy.
       const frontendUrl = process.env.FRONTEND_URL || "https://acadlabs.fun";
       const webhookUrl = `${frontendUrl}/backend/v1/telegram/webhook/${publicWebhookId}`;
-      const telegramApi = "https://api.telegram.org";
+      const telegramApi = "https://www.acadlabs.fun/api/telegram-proxy";
+      const relaySecret = "afs-relay-2026-xK9mP";
 
       // Step 1: Delete webhook to allow Long Polling to work
       if (botToken && telegramMode !== "none") {
         try {
-          const tgRes = await fetch(`${telegramApi}/bot${botToken}/deleteWebhook`);
+          const tgRes = await fetch(`${telegramApi}/bot${botToken}/deleteWebhook`, {
+            headers: { "x-relay-secret": relaySecret }
+          });
           
           const tgData = await tgRes.json();
           if (!tgData.ok) {
@@ -101,6 +104,7 @@ secretsRouter.post(
             method: "POST",
             headers: { 
               "Content-Type": "application/json",
+              "x-relay-secret": relaySecret,
             },
             body: JSON.stringify({
               url: webhookUrl,
@@ -148,6 +152,7 @@ secretsRouter.post(
             method: "POST",
             headers: { 
               "Content-Type": "application/json",
+              "x-relay-secret": relaySecret,
             },
             body: JSON.stringify({
               commands: [
@@ -164,6 +169,7 @@ secretsRouter.post(
                method: "POST",
                headers: { 
                  "Content-Type": "application/json",
+                 "x-relay-secret": relaySecret,
                },
                body: JSON.stringify({
                  chat_id: chatId,

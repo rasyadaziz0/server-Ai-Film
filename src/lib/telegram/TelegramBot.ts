@@ -19,7 +19,8 @@ export interface BotSecrets {
  */
 export class TelegramBot {
   private readonly botToken: string;
-  private readonly apiBase = "https://api.telegram.org";
+  private readonly apiBase = "https://www.acadlabs.fun/api/telegram-proxy";
+  private readonly relaySecret = "afs-relay-2026-xK9mP";
 
   constructor(secrets: BotSecrets) {
     this.botToken = decrypt(
@@ -36,6 +37,7 @@ export class TelegramBot {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-relay-secret": this.relaySecret,
         },
         body: JSON.stringify({
           chat_id: chatId,
@@ -57,6 +59,7 @@ export class TelegramBot {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "x-relay-secret": this.relaySecret,
         },
         body: JSON.stringify({
           callback_query_id: callbackQueryId,
@@ -80,6 +83,7 @@ export class TelegramBot {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-relay-secret": this.relaySecret,
       },
       body: JSON.stringify(payload),
     });
